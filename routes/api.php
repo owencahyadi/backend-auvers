@@ -8,6 +8,12 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Api\StoreController;
 use App\Http\Controllers\Api\UserController;
 
+// ---------------------------------------------------------
+// Rute Publik (Tidak perlu token untuk akses)
+// ---------------------------------------------------------
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
+// Rute ini bisa diakses siapa saja (Apakah seharusnya dilindungi token juga?)
 Route::get('/calculate-payroll', [RosterController::class, 'calculatePayroll']);
 Route::get('/employees', [RosterController::class, 'getEmployees']); 
 Route::post('/rosters', [RosterController::class, 'storeShift']); 
@@ -21,16 +27,21 @@ Route::get('/profit-loss', [ProfitLossController::class, 'index']);
 Route::apiResource('operational-costs', App\Http\Controllers\OperationalCostController::class)->except(['update', 'show']);
 Route::get('/profit-loss/monthly', [App\Http\Controllers\ProfitLossController::class, 'monthly']);
 Route::post('/profit-loss/sales', [ProfitLossController::class, 'saveSales']);
-Route::middleware('web')->group(function () {
-    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-});
-
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
-
 Route::get('/stores', [StoreController::class, 'index']);
 Route::get('/users', [UserController::class, 'index']);
 Route::post('/users', [UserController::class, 'store']);
 Route::delete('/users/{id}', [UserController::class, 'destroy']);
+
+
+// ---------------------------------------------------------
+// Rute Privat (Wajib pakai Token / Harus Login dulu)
+// ---------------------------------------------------------
+Route::middleware('auth:sanctum')->group(function () {
+    // Rute Logout wajib pakai token agar sistem tahu siapa yang mau logout
+    Route::post('/logout', [AuthController::class, 'logout']);
+    
+    // Ambil data user yang sedang login
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+});

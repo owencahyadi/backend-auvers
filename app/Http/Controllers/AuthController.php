@@ -10,19 +10,24 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
+        // 1. Validasi input
         $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string', 'min:6'],
         ]);
 
+        // 2. Coba autentikasi
         if (Auth::attempt($request->only('email', 'password'))) {
-            $request->session()->regenerate(); 
-
+            
             $user = Auth::user();
+            
+            // 3. Buat Token Sanctum (Pengganti Session Cookie)
+            $token = $user->createToken('auth_token')->plainTextToken;
             
             return response()->json([
                 'status' => 'success',
                 'message' => 'Login berhasil',
+                'token' => $token, // <-- Kirim token ke React
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -33,6 +38,7 @@ class AuthController extends Controller
             ]);
         }
 
+        // 4. Jika gagal login
         throw ValidationException::withMessages([
             'email' => ['These credentials do not match our records.'],
         ]);
@@ -40,11 +46,12 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        Auth::guard('web')->logout();
-        
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        // Menghapus (mencabut) token yang saat ini digunakan oleh user
+        $request->user()->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Logged out successfully']);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Logged out successfully'
+        ]);
     }
 }
