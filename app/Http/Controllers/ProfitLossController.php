@@ -184,7 +184,9 @@ class ProfitLossController extends Controller
         $month = $request->input('month', date('Y-m'));
         $year = date('Y', strtotime($month));
         $monthNum = date('m', strtotime($month));
-        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $monthNum, $year);
+        
+        // MENGGUNAKAN CARBON SEBAGAI PENGGANTI cal_days_in_month
+        $daysInMonth = Carbon::createFromDate($year, $monthNum, 1)->daysInMonth;
 
         $weeks = [];
         $startDay = 1;
