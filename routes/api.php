@@ -1,0 +1,34 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\RosterController;
+use App\Http\Controllers\ProfitLossController;
+use App\Http\Controllers\AuthController;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Api\StoreController;
+use App\Http\Controllers\Api\UserController;
+
+Route::get('/calculate-payroll', [RosterController::class, 'calculatePayroll']);
+Route::get('/employees', [RosterController::class, 'getEmployees']); 
+Route::post('/rosters', [RosterController::class, 'storeShift']); 
+Route::post('/employees', [RosterController::class, 'storeEmployee']);
+Route::put('/employees/{id}/rates', [RosterController::class, 'updateRate']);
+Route::put('/employees/{id}/weekly-rates', [App\Http\Controllers\Api\RosterController::class, 'updateWeeklyRate']);
+Route::get('/rosters/calendar', [App\Http\Controllers\Api\RosterController::class, 'getCalendarData']);
+Route::apiResource('supplier-items', App\Http\Controllers\SupplierItemController::class);
+Route::apiResource('purchases', App\Http\Controllers\PurchaseController::class)->except(['update', 'show']);
+Route::get('/profit-loss', [ProfitLossController::class, 'index']);
+Route::apiResource('operational-costs', App\Http\Controllers\OperationalCostController::class)->except(['update', 'show']);
+Route::get('/profit-loss/monthly', [App\Http\Controllers\ProfitLossController::class, 'monthly']);
+Route::post('/profit-loss/sales', [ProfitLossController::class, 'saveSales']);
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+
+Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
+    return $request->user();
+});
+
+Route::get('/stores', [StoreController::class, 'index']);
+Route::get('/users', [UserController::class, 'index']);
+Route::post('/users', [UserController::class, 'store']);
+Route::delete('/users/{id}', [UserController::class, 'destroy']);
