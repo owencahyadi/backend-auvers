@@ -199,8 +199,8 @@ return [
     |
     */
 
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
-
+'same_site' => 'none', // WAJIB 'none' jika beda domain (Vercel ke Render)
+'secure' => true,      // WAJIB true karena Vercel & Render menggunakan HTTPS
     /*
     |--------------------------------------------------------------------------
     | Partitioned Cookies
