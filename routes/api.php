@@ -21,8 +21,10 @@ Route::get('/profit-loss', [ProfitLossController::class, 'index']);
 Route::apiResource('operational-costs', App\Http\Controllers\OperationalCostController::class)->except(['update', 'show']);
 Route::get('/profit-loss/monthly', [App\Http\Controllers\ProfitLossController::class, 'monthly']);
 Route::post('/profit-loss/sales', [ProfitLossController::class, 'saveSales']);
-Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
-Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+Route::middleware('web')->group(function () {
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+});
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
