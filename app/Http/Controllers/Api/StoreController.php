@@ -56,4 +56,20 @@ class StoreController extends Controller
             'message' => 'Nama cabang berhasil diubah!'
         ]);
     }
+
+    public function destroy($id)
+    {
+        $store = Store::find($id);
+        
+        if (!$store) {
+            return response()->json(['status' => 'error', 'message' => 'Cabang tidak ditemukan'], 404);
+        }
+
+        $store->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Cabang berhasil dihapus!'
+        ]);
+    }
 }

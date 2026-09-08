@@ -32,6 +32,7 @@ Route::post('/profit-loss/sales', [ProfitLossController::class, 'saveSales']);
 Route::get('/stores', [StoreController::class, 'index']);
 Route::post('/stores', [StoreController::class, 'store']);
 Route::put('/stores/{id}', [StoreController::class, 'update']);
+Route::delete('/stores/{id}', [StoreController::class, 'destroy']);
 Route::get('/users', [UserController::class, 'index']);
 Route::post('/users', [UserController::class, 'store']);
 Route::delete('/users/{id}', [UserController::class, 'destroy']);
