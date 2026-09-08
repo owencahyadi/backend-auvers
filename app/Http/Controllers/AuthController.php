@@ -32,8 +32,9 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'role' => $user->role,         // Ambil role asli dari database
-                    'store_id' => $user->store_id  // Ambil store_id asli dari database
+                    'role' => $user->role,
+                    'store_id' => $user->store_id,
+                    'visible_pages' => $user->visible_pages // <-- TAMBAHKAN BARIS INI
                 ]
             ]);
         }

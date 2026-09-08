@@ -31,7 +31,7 @@ class UserController extends Controller
             'password' => 'required|min:6',
             'role' => 'required|in:admin,manager',
             'store_id' => 'nullable|exists:stores,id',
-            'visible_pages' => 'nullable|array' // Validasi input array
+            'visible_pages' => 'nullable|array' 
         ]);
 
         $user = User::create([
@@ -40,32 +40,12 @@ class UserController extends Controller
             'password' => bcrypt($request->password),
             'role' => $request->role,
             'store_id' => $request->role === 'manager' ? $request->store_id : null,
-            // Simpan array jika manager, jika admin biarkan null (karena admin bisa akses semua)
             'visible_pages' => $request->role === 'manager' ? $request->visible_pages : null,
         ]);
 
-        return response()->json(['status' => 'success', 'message' => 'User berhasil dibuat']);
-    }
-
-    // Menghapus user
-// Menghapus user
-    public function destroy($id)
-    {
-        $user = User::findOrFail($id);
-        
-        // PERBAIKAN: Gunakan Auth::id() atau Auth::user()->id
-        if ($user->id === \Illuminate\Support\Facades\Auth::id()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'You cannot delete your own active account.'
-            ], 403);
-        }
-
-        $user->delete();
-
         return response()->json([
-            'status' => 'success',
-            'message' => 'User deleted successfully.'
+            'status' => 'success', 
+            'message' => 'New user account created successfully!'
         ]);
     }
 
@@ -74,20 +54,17 @@ class UserController extends Controller
         $user = User::find($id);
         
         if (!$user) {
-            return response()->json(['status' => 'error', 'message' => 'User tidak ditemukan'], 404);
+            return response()->json(['status' => 'error', 'message' => 'User account not found.'], 404);
         }
 
-        // Validasi input
         $request->validate([
             'name' => 'required|string|max:255',
-            // Pastikan email unik, kecuali untuk email milik user ini sendiri
             'email' => 'required|email|unique:users,email,' . $id, 
             'role' => 'required|in:admin,manager',
             'store_id' => 'nullable|exists:stores,id',
             'visible_pages' => 'nullable|array'
         ]);
 
-        // Siapkan data yang akan di-update
         $dataToUpdate = [
             'name' => $request->name,
             'email' => $request->email,
@@ -96,13 +73,31 @@ class UserController extends Controller
             'visible_pages' => $request->role === 'manager' ? $request->visible_pages : null,
         ];
 
-        // Update password HANYA jika field password diisi (tidak kosong)
+        // Update password hanya jika diisi
         if ($request->filled('password')) {
             $dataToUpdate['password'] = bcrypt($request->password);
         }
 
         $user->update($dataToUpdate);
 
-        return response()->json(['status' => 'success', 'message' => 'Data User dan Hak Akses berhasil diperbarui!']);
+        return response()->json([
+            'status' => 'success', 
+            'message' => 'User account and permissions updated successfully!'
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['status' => 'error', 'message' => 'User account not found.'], 404);
+        }
+
+        $user->delete();
+
+        return response()->json([
+            'status' => 'success', 
+            'message' => 'User account deleted successfully!'
+        ]);
     }
 }
