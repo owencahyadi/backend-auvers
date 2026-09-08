@@ -18,4 +18,42 @@ class StoreController extends Controller
             'data' => $stores
         ]);
     }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255'
+        ]);
+
+        $store = Store::create([
+            'name' => $request->name
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Cabang baru berhasil ditambahkan!',
+            'data' => $store
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255'
+        ]);
+
+        $store = Store::find($id);
+        if (!$store) {
+            return response()->json(['status' => 'error', 'message' => 'Cabang tidak ditemukan'], 404);
+        }
+
+        $store->update([
+            'name' => $request->name
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Nama cabang berhasil diubah!'
+        ]);
+    }
 }
