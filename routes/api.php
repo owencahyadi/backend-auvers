@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\StoreController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\SupplierItemController;
 
 // ---------------------------------------------------------
 // Rute Publik (Tidak perlu token untuk akses)
@@ -24,6 +25,7 @@ Route::put('/employees/{id}', [RosterController::class, 'updateEmployee']);
 Route::delete('/employees/{id}', [RosterController::class, 'destroyEmployee']);
 Route::get('/rosters/calendar', [App\Http\Controllers\Api\RosterController::class, 'getCalendarData']);
 Route::apiResource('supplier-items', App\Http\Controllers\SupplierItemController::class);
+Route::get('/supplier-categories', [SupplierItemController::class, 'getCategories']);
 Route::apiResource('purchases', App\Http\Controllers\PurchaseController::class)->except(['update', 'show']);
 Route::get('/profit-loss', [ProfitLossController::class, 'index']);
 Route::apiResource('operational-costs', App\Http\Controllers\OperationalCostController::class)->except(['update', 'show']);

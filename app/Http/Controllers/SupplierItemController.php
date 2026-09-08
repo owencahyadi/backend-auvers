@@ -51,4 +51,12 @@ class SupplierItemController extends Controller
         SupplierItem::findOrFail($id)->delete();
         return response()->json(['message' => 'Barang berhasil dihapus']);
     }
+
+    public function getCategories()
+    {
+        // Mengambil daftar kategori unik yang ada di tabel supplier_items
+        $categories = SupplierItem::select('category')->distinct()->pluck('category');
+        
+        return response()->json(['data' => $categories]);
+    }
 }
