@@ -12,9 +12,7 @@ class UserController extends Controller
     // Mengambil daftar seluruh user beserta data tokonya
     public function index()
     {
-        $users = User::with('store')
-                     ->select('id', 'name', 'email', 'role', 'store_id')
-                     ->get();
+        $users = User::with('store')->orderBy('id', 'asc')->get();
 
         return response()->json([
             'status' => 'success',
