@@ -27,26 +27,24 @@ class UserController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6',
+            'email' => 'required|email|unique:users',
+            'password' => 'required|min:6',
             'role' => 'required|in:admin,manager',
-            'store_id' => 'nullable|exists:stores,id'
+            'store_id' => 'nullable|exists:stores,id',
+            'visible_pages' => 'nullable|array' // Validasi input array
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => bcrypt($request->password),
             'role' => $request->role,
-            // Jika role admin, store_id otomatis diset null
             'store_id' => $request->role === 'manager' ? $request->store_id : null,
+            // Simpan array jika manager, jika admin biarkan null (karena admin bisa akses semua)
+            'visible_pages' => $request->role === 'manager' ? $request->visible_pages : null,
         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'User account created successfully!',
-            'data' => $user
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'User berhasil dibuat']);
     }
 
     // Menghapus user

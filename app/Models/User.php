@@ -24,7 +24,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role',       
-        'store_id',   
+        'store_id', 
+        'visible_pages',
     ];
 
     /**
@@ -47,6 +48,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'visible_pages' => 'array',
         ];
     }
 
