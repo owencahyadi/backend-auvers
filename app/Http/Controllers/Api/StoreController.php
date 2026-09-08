@@ -11,7 +11,7 @@ class StoreController extends Controller
     public function index()
     {
         // Mengambil semua data toko (hanya id dan nama agar ringan)
-        $stores = Store::select('id', 'name')->get();
+        $stores = Store::select('id', 'name')->orderBy('id', 'asc')->get();       
         
         return response()->json([
             'status' => 'success',
