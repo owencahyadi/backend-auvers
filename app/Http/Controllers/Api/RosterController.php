@@ -170,7 +170,7 @@ class RosterController extends Controller
 
     public function getEmployees()
     {
-        $employees = Employee::select('id', 'name')->get();
+        $employees = Employee::select('id', 'name', 'position')->get();
         return response()->json([
             'status' => 'success',
             'data' => $employees
@@ -366,6 +366,49 @@ class RosterController extends Controller
         return response()->json([
             'status' => 'success', 
             'data' => $rosters
+        ]);
+    }
+
+    // Menangani PUT /api/employees/{id}
+    public function updateEmployee(Request $request, $id)
+    {
+        $request->validate([
+            'name' => 'required|string',
+            'position' => 'required|string',
+        ]);
+
+        $employee = Employee::find($id);
+
+        if (!$employee) {
+            return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
+        }
+
+        $employee->update([
+            'name' => $request->name,
+            'position' => $request->position,
+        ]);
+
+        return response()->json([
+            'status' => 'success', 
+            'message' => 'Data karyawan berhasil diubah!'
+        ]);
+    }
+
+    // Menangani DELETE /api/employees/{id}
+    public function destroyEmployee($id)
+    {
+        $employee = Employee::find($id);
+
+        if (!$employee) {
+            return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
+        }
+
+        // Hapus karyawan (jika ada relasi seperti roster, pastikan sudah diset cascade di database atau hapus manual di sini)
+        $employee->delete();
+
+        return response()->json([
+            'status' => 'success', 
+            'message' => 'Karyawan berhasil dihapus!'
         ]);
     }
 }

@@ -20,6 +20,8 @@ Route::post('/rosters', [RosterController::class, 'storeShift']);
 Route::post('/employees', [RosterController::class, 'storeEmployee']);
 Route::put('/employees/{id}/rates', [RosterController::class, 'updateRate']);
 Route::put('/employees/{id}/weekly-rates', [App\Http\Controllers\Api\RosterController::class, 'updateWeeklyRate']);
+Route::put('/employees/{id}', [RosterController::class, 'updateEmployee']);
+Route::delete('/employees/{id}', [RosterController::class, 'destroyEmployee']);
 Route::get('/rosters/calendar', [App\Http\Controllers\Api\RosterController::class, 'getCalendarData']);
 Route::apiResource('supplier-items', App\Http\Controllers\SupplierItemController::class);
 Route::apiResource('purchases', App\Http\Controllers\PurchaseController::class)->except(['update', 'show']);
