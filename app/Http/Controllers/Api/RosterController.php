@@ -170,7 +170,7 @@ class RosterController extends Controller
 
     public function getEmployees()
     {
-        $employees = Employee::select('id', 'name', 'position')->get();
+        $employees = Employee::select('id', 'name', 'position')->orderBy('id', 'asc')->get();
         return response()->json([
             'status' => 'success',
             'data' => $employees
