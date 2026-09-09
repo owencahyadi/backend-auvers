@@ -16,7 +16,6 @@ class RosterController extends Controller
         $startDate = $request->query('start_date', '2026-07-13'); 
         $endDate = Carbon::parse($startDate)->endOfWeek()->format('Y-m-d');
 
-        // 1. ORDER BY DESC: Menarik data roster dari Minggu mundur ke Senin
         $employees = Employee::with(['dailyRate', 'rosters' => function($query) use ($startDate, $endDate) {
             $query->whereBetween('date', [$startDate, $endDate])
                   ->orderBy('date', 'desc'); 
@@ -28,10 +27,12 @@ class RosterController extends Controller
             $cumulativeHours = 0;
             $rates = $employee->dailyRate;
 
-            // 2. OT THRESHOLD DINAMIS: Ambil dari database, default 38 jika belum diset
+            // CEK APAKAH PUNYA GAJI POKOK (BASE ALLOWANCE)
+            $isFixedSalary = $rates ? (bool) $rates->is_fixed_salary : false;
+            $fixedAmount = $rates ? floatval($rates->fixed_salary_amount) : 0;
+
             $thresholdHours = $rates ? floatval($rates->ot_threshold) : 38; 
 
-            // Ambil Master Rate sebagai Default awal
             $displayRateWeekday = $rates ? $rates->rate_mon : 0;
             $displayRateSat = $rates ? $rates->rate_sat : 0;
             $displayRateSun = $rates ? $rates->rate_sun : 0;
@@ -39,10 +40,8 @@ class RosterController extends Controller
             $payMon = 0; $payTue = 0; $payWed = 0; $payThu = 0; $payFri = 0;
             $paySat = 0; $paySun = 0;
 
-            // Looping ini memproses hari secara mundur (Minggu -> Sabtu -> Jumat ... dst)
             foreach ($employee->rosters as $shift) {
                 
-                // PEMECAHAN JAM SECARA KRONOLOGIS UNTUK SHIFT 1 & SHIFT 2
                 $shift1_hours = 0;
                 if ($shift->start_1 && $shift->end_1) {
                     $start1 = Carbon::parse($shift->start_1);
@@ -58,13 +57,11 @@ class RosterController extends Controller
                 }
 
                 $rate1 = floatval($shift->applied_rate ?? 0);
-                // Jika rate 2 kosong/null di DB, otomatis gunakan rate 1
                 $rate2 = $shift->applied_rate_2 !== null ? floatval($shift->applied_rate_2) : $rate1; 
                 $overtimeRate = floatval($shift->applied_overtime_rate ?? 0);
                 
                 $dailyPay = 0;
 
-                // KALKULASI SHIFT 1
                 if ($shift1_hours > 0) {
                     if ($cumulativeHours >= $thresholdHours) {
                         $dailyPay += ($shift1_hours * $overtimeRate);
@@ -78,7 +75,6 @@ class RosterController extends Controller
                     $cumulativeHours += $shift1_hours;
                 }
 
-                // KALKULASI SHIFT 2
                 if ($shift2_hours > 0) {
                     if ($cumulativeHours >= $thresholdHours) {
                         $dailyPay += ($shift2_hours * $overtimeRate);
@@ -92,7 +88,6 @@ class RosterController extends Controller
                     $cumulativeHours += $shift2_hours;
                 }
 
-                // Fallback untuk legacy data yang tidak punya jam start/end tapi punya total_hours
                 if ($shift1_hours == 0 && $shift2_hours == 0 && $shift->total_hours > 0) {
                     $hours = floatval($shift->total_hours);
                     if ($cumulativeHours >= $thresholdHours) {
@@ -109,7 +104,6 @@ class RosterController extends Controller
 
                 $dayName = strtolower(Carbon::parse($shift->date)->format('l'));
                 
-                // TIMPA Master Rate dengan Rate Aktual yang dipakai di minggu ini untuk display UI
                 if (in_array($dayName, ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'])) {
                     $displayRateWeekday = $rate1;
                 } elseif ($dayName == 'saturday') {
@@ -129,12 +123,20 @@ class RosterController extends Controller
                 }
             }
 
+            // Hitung total murni dari jam kerja
             $totalWeekday = $payMon + $payTue + $payWed + $payThu + $payFri;
             $grandTotal = $totalWeekday + $paySat + $paySun;
+
+            // LOGIKA BARU: Tambahkan Base Salary ke Grand Total tanpa menghapus jam-jaman
+            if ($isFixedSalary && $fixedAmount > 0) {
+                $grandTotal += $fixedAmount;
+            }
 
             $result[] = [
                 'id' => $employee->id,
                 'name' => $employee->name,
+                'is_fixed_salary' => $isFixedSalary,     
+                'fixed_salary_amount' => $fixedAmount,   
                 'rate_weekday' => $displayRateWeekday,
                 'rate_sat' => $displayRateSat,
                 'rate_sun' => $displayRateSun,
@@ -238,11 +240,6 @@ class RosterController extends Controller
         $request->validate([
             'name' => 'required|string',
             'position' => 'required|string',
-            'base_rate' => 'required|numeric', 
-            'rate_sat' => 'required|numeric', 
-            'rate_sun' => 'required|numeric', 
-            'overtime_rate' => 'required|numeric',
-            'ot_threshold' => 'required|numeric' 
         ]);
 
         $employee = Employee::create([
@@ -251,18 +248,23 @@ class RosterController extends Controller
             'level' => 'Standard' 
         ]);
 
-        DailyRate::create([
-            'employee_id' => $employee->id,
-            'rate_mon' => $request->base_rate,
-            'rate_tue' => $request->base_rate,
-            'rate_wed' => $request->base_rate,
-            'rate_thu' => $request->base_rate,
-            'rate_fri' => $request->base_rate,
-            'rate_sat' => $request->rate_sat, 
-            'rate_sun' => $request->rate_sun, 
-            'overtime_rate' => $request->overtime_rate,
-            'ot_threshold' => $request->ot_threshold 
-        ]);
+        $dailyRate = new DailyRate();
+        $dailyRate->employee_id = $employee->id;
+        $dailyRate->is_fixed_salary = $request->is_fixed_salary ? 1 : 0;
+        $dailyRate->fixed_salary_amount = is_numeric($request->fixed_salary_amount) ? (float)$request->fixed_salary_amount : 0;
+        
+        $dailyRate->rate_mon = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+        $dailyRate->rate_tue = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+        $dailyRate->rate_wed = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+        $dailyRate->rate_thu = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+        $dailyRate->rate_fri = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+        
+        $dailyRate->rate_sat = is_numeric($request->rate_sat) ? (float)$request->rate_sat : 0;
+        $dailyRate->rate_sun = is_numeric($request->rate_sun) ? (float)$request->rate_sun : 0;
+        $dailyRate->overtime_rate = is_numeric($request->overtime_rate) ? (float)$request->overtime_rate : 0;
+        $dailyRate->ot_threshold = is_numeric($request->ot_threshold) ? (float)$request->ot_threshold : 38;
+        
+        $dailyRate->save(); 
 
         return response()->json([
             'status' => 'success',
@@ -272,28 +274,24 @@ class RosterController extends Controller
 
     public function updateRate(Request $request, $id)
     {
-        $request->validate([
-            'base_rate' => 'required|numeric',
-            'rate_sat' => 'required|numeric', 
-            'rate_sun' => 'required|numeric', 
-            'overtime_rate' => 'required|numeric',
-            'ot_threshold' => 'required|numeric' 
-        ]);
-
         $dailyRate = DailyRate::where('employee_id', $id)->first();
         
         if ($dailyRate) {
-            $dailyRate->update([
-                'rate_mon' => $request->base_rate,
-                'rate_tue' => $request->base_rate,
-                'rate_wed' => $request->base_rate,
-                'rate_thu' => $request->base_rate,
-                'rate_fri' => $request->base_rate,
-                'rate_sat' => $request->rate_sat, 
-                'rate_sun' => $request->rate_sun, 
-                'overtime_rate' => $request->overtime_rate,
-                'ot_threshold' => $request->ot_threshold 
-            ]);
+            $dailyRate->is_fixed_salary = $request->is_fixed_salary ? 1 : 0;
+            $dailyRate->fixed_salary_amount = is_numeric($request->fixed_salary_amount) ? (float)$request->fixed_salary_amount : 0;
+            
+            $dailyRate->rate_mon = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+            $dailyRate->rate_tue = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+            $dailyRate->rate_wed = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+            $dailyRate->rate_thu = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+            $dailyRate->rate_fri = is_numeric($request->base_rate) ? (float)$request->base_rate : 0;
+            
+            $dailyRate->rate_sat = is_numeric($request->rate_sat) ? (float)$request->rate_sat : 0;
+            $dailyRate->rate_sun = is_numeric($request->rate_sun) ? (float)$request->rate_sun : 0;
+            $dailyRate->overtime_rate = is_numeric($request->overtime_rate) ? (float)$request->overtime_rate : 0;
+            $dailyRate->ot_threshold = is_numeric($request->ot_threshold) ? (float)$request->ot_threshold : 38;
+            
+            $dailyRate->save(); 
 
             return response()->json(['status' => 'success', 'message' => 'Rate berhasil diubah!']);
         }
@@ -354,11 +352,8 @@ class RosterController extends Controller
         $startDate = $request->query('start_date', '2026-07-13');
         $endDate = \Carbon\Carbon::parse($startDate)->endOfWeek()->format('Y-m-d');
 
-        // 1. Ambil ID Karyawan HANYA untuk toko yang sedang aktif
-        // (Ini otomatis terfilter berkat Trait BelongsToStore di model Employee)
         $employeeIds = Employee::pluck('id');
 
-        // 2. Ambil roster HANYA milik karyawan-karyawan di toko ini
         $rosters = Roster::whereIn('employee_id', $employeeIds)
                          ->whereBetween('date', [$startDate, $endDate])
                          ->get();
@@ -369,7 +364,6 @@ class RosterController extends Controller
         ]);
     }
 
-    // Menangani PUT /api/employees/{id}
     public function updateEmployee(Request $request, $id)
     {
         $request->validate([
@@ -394,7 +388,6 @@ class RosterController extends Controller
         ]);
     }
 
-    // Menangani DELETE /api/employees/{id}
     public function destroyEmployee($id)
     {
         $employee = Employee::find($id);
@@ -403,7 +396,6 @@ class RosterController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
         }
 
-        // Hapus karyawan (jika ada relasi seperti roster, pastikan sudah diset cascade di database atau hapus manual di sini)
         $employee->delete();
 
         return response()->json([
