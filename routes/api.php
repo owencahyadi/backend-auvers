@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Api\StoreController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\SupplierItemController;
-use App\Http\Controllers\Api\OperationalNoteController;
+use App\Http\Controllers\OperationalNoteController;
 
 // ---------------------------------------------------------
 // Rute Publik (Tidak perlu token untuk akses)
