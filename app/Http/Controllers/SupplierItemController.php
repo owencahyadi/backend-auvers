@@ -59,4 +59,32 @@ class SupplierItemController extends Controller
         
         return response()->json(['data' => $categories]);
     }
+
+    // Update Massal Nama Kategori
+    public function updateCategory(Request $request)
+    {
+        $request->validate([
+            'old_name' => 'required|string',
+            'new_name' => 'required|string',
+        ]);
+
+        SupplierItem::where('category', $request->old_name)
+                    ->update(['category' => $request->new_name]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Category renamed for all items!'
+        ]);
+    }
+
+    // Hapus Massal Kategori dan Seluruh Isinya
+    public function destroyCategory($name)
+    {
+        SupplierItem::where('category', $name)->delete();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Category and all its items deleted!'
+        ]);
+    }
 }
