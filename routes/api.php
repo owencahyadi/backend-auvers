@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Api\StoreController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\SupplierItemController;
+use App\Http\Controllers\Api\OperationalNoteController;
 
 // ---------------------------------------------------------
 // Rute Publik (Tidak perlu token untuk akses)
@@ -41,7 +42,7 @@ Route::get('/users', [UserController::class, 'index']);
 Route::post('/users', [UserController::class, 'store']);
 Route::delete('/users/{id}', [UserController::class, 'destroy']);
 Route::put('/users/{id}', [UserController::class, 'update']);
-
+Route::apiResource('operational-notes', OperationalNoteController::class);
 
 // ---------------------------------------------------------
 // Rute Privat (Wajib pakai Token / Harus Login dulu)
