@@ -16,6 +16,7 @@ class Roster extends Model
         'total_hours',
         'applied_rate',
         'applied_overtime_rate',
+        'applied_base_allowance',
         
         // --- KOLOM BARU YANG KITA TAMBAHKAN ---
         'is_unavailable',

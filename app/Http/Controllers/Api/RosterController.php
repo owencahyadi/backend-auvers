@@ -26,11 +26,6 @@ class RosterController extends Controller
         foreach ($employees as $employee) {
             $cumulativeHours = 0;
             $rates = $employee->dailyRate;
-
-            // CEK APAKAH PUNYA GAJI POKOK (BASE ALLOWANCE)
-            $isFixedSalary = $rates ? (bool) $rates->is_fixed_salary : false;
-            $fixedAmount = $rates ? floatval($rates->fixed_salary_amount) : 0;
-
             $thresholdHours = $rates ? floatval($rates->ot_threshold) : 38; 
 
             $displayRateWeekday = $rates ? $rates->rate_mon : 0;
@@ -40,8 +35,18 @@ class RosterController extends Controller
             $payMon = 0; $payTue = 0; $payWed = 0; $payThu = 0; $payFri = 0;
             $paySat = 0; $paySun = 0;
 
+            // LOGIKA BARU: Melacak apakah ada Base Allowance khusus di minggu ini
+            $hasWeeklyOverride = false;
+            $weeklyFixedAmount = 0;
+
             foreach ($employee->rosters as $shift) {
                 
+                // Cek Override Base Allowance Mingguan (Tersimpan di shift hari Senin)
+                if ($shift->applied_base_allowance !== null) {
+                    $hasWeeklyOverride = true;
+                    $weeklyFixedAmount += floatval($shift->applied_base_allowance);
+                }
+
                 $shift1_hours = 0;
                 if ($shift->start_1 && $shift->end_1) {
                     $start1 = Carbon::parse($shift->start_1);
@@ -123,11 +128,18 @@ class RosterController extends Controller
                 }
             }
 
-            // Hitung total murni dari jam kerja
+            // Tentukan status Base Allowance akhirnya (Prioritaskan Override Mingguan jika ada)
+            if ($hasWeeklyOverride) {
+                $isFixedSalary = $weeklyFixedAmount > 0;
+                $fixedAmount = $weeklyFixedAmount;
+            } else {
+                $isFixedSalary = $rates ? (bool) $rates->is_fixed_salary : false;
+                $fixedAmount = $rates ? floatval($rates->fixed_salary_amount) : 0;
+            }
+
             $totalWeekday = $payMon + $payTue + $payWed + $payThu + $payFri;
             $grandTotal = $totalWeekday + $paySat + $paySun;
 
-            // LOGIKA BARU: Tambahkan Base Salary ke Grand Total tanpa menghapus jam-jaman
             if ($isFixedSalary && $fixedAmount > 0) {
                 $grandTotal += $fixedAmount;
             }
@@ -154,14 +166,7 @@ class RosterController extends Controller
         }
 
         $weeklySale = \App\Models\WeeklySale::where('week_start_date', $startDate)->first();
-        
-        $totalSales = 0;
-        if ($weeklySale) {
-            $totalSales = floatval($weeklySale->food) + 
-                          floatval($weeklySale->beverage) + 
-                          floatval($weeklySale->alcohol) + 
-                          floatval($weeklySale->stall);
-        }
+        $totalSales = $weeklySale ? floatval($weeklySale->food) + floatval($weeklySale->beverage) + floatval($weeklySale->alcohol) + floatval($weeklySale->stall) : 0;
 
         return response()->json([
             'status' => 'success', 
@@ -170,13 +175,68 @@ class RosterController extends Controller
         ]);
     }
 
+    public function updateWeeklyRate(Request $request, $id)
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'base_rate' => 'required|numeric',
+            'rate_sat' => 'required|numeric', 
+            'rate_sun' => 'required|numeric', 
+            'overtime_rate' => 'required|numeric',
+            'ot_threshold' => 'sometimes|numeric',
+            'is_fixed_salary' => 'sometimes|boolean',
+            'fixed_salary_amount' => 'sometimes|numeric'
+        ]);
+
+        $startDate = Carbon::parse($request->start_date)->startOfWeek();
+        
+        // Simpan jumlah Base Allowance khusus ke hari Senin saja agar tidak ter-kali lipat 7
+        $baseAllowanceForWeek = $request->is_fixed_salary ? floatval($request->fixed_salary_amount) : 0;
+
+        for ($i = 0; $i < 7; $i++) {
+            $currentDate = $startDate->copy()->addDays($i);
+            $dayName = strtolower($currentDate->format('D')); 
+            
+            if ($dayName === 'sat') {
+                $rateValue = $request->rate_sat;
+            } elseif ($dayName === 'sun') {
+                $rateValue = $request->rate_sun;
+            } else {
+                $rateValue = $request->base_rate;
+            }
+
+            // Terapkan override Base Allowance hanya di indeks ke-0 (Senin)
+            $appliedBase = ($i === 0) ? $baseAllowanceForWeek : null;
+
+            $existingShift = Roster::where('employee_id', $id)
+                                   ->where('date', $currentDate->format('Y-m-d'))
+                                   ->first();
+
+            if ($existingShift) {
+                $existingShift->update([
+                    'applied_rate' => $rateValue,
+                    'applied_overtime_rate' => $request->overtime_rate,
+                    'applied_base_allowance' => $appliedBase
+                ]);
+            } else {
+                Roster::create([
+                    'employee_id' => $id,
+                    'date' => $currentDate->format('Y-m-d'),
+                    'total_hours' => 0,
+                    'applied_rate' => $rateValue,
+                    'applied_overtime_rate' => $request->overtime_rate,
+                    'applied_base_allowance' => $appliedBase
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'success', 'message' => 'Rate khusus minggu ini berhasil diterapkan!']);
+    }
+
     public function getEmployees()
     {
         $employees = Employee::select('id', 'name', 'position')->orderBy('id', 'asc')->get();
-        return response()->json([
-            'status' => 'success',
-            'data' => $employees
-        ]);
+        return response()->json(['status' => 'success', 'data' => $employees]);
     }
 
     public function storeShift(Request $request)
@@ -266,10 +326,7 @@ class RosterController extends Controller
         
         $dailyRate->save(); 
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Karyawan dan Rate berhasil ditambahkan!'
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'Karyawan dan Rate berhasil ditambahkan!']);
     }
 
     public function updateRate(Request $request, $id)
@@ -299,54 +356,6 @@ class RosterController extends Controller
         return response()->json(['status' => 'error', 'message' => 'Data tidak ditemukan'], 404);
     }
 
-    public function updateWeeklyRate(Request $request, $id)
-    {
-        $request->validate([
-            'start_date' => 'required|date',
-            'base_rate' => 'required|numeric',
-            'rate_sat' => 'required|numeric', 
-            'rate_sun' => 'required|numeric', 
-            'overtime_rate' => 'required|numeric',
-            'ot_threshold' => 'sometimes|numeric' 
-        ]);
-
-        $startDate = Carbon::parse($request->start_date)->startOfWeek();
-
-        for ($i = 0; $i < 7; $i++) {
-            $currentDate = $startDate->copy()->addDays($i);
-            $dayName = strtolower($currentDate->format('D')); 
-            
-            if ($dayName === 'sat') {
-                $rateValue = $request->rate_sat;
-            } elseif ($dayName === 'sun') {
-                $rateValue = $request->rate_sun;
-            } else {
-                $rateValue = $request->base_rate;
-            }
-
-            $existingShift = Roster::where('employee_id', $id)
-                                   ->where('date', $currentDate->format('Y-m-d'))
-                                   ->first();
-
-            if ($existingShift) {
-                $existingShift->update([
-                    'applied_rate' => $rateValue,
-                    'applied_overtime_rate' => $request->overtime_rate
-                ]);
-            } else {
-                Roster::create([
-                    'employee_id' => $id,
-                    'date' => $currentDate->format('Y-m-d'),
-                    'total_hours' => 0,
-                    'applied_rate' => $rateValue,
-                    'applied_overtime_rate' => $request->overtime_rate
-                ]);
-            }
-        }
-
-        return response()->json(['status' => 'success', 'message' => 'Rate khusus minggu ini berhasil diterapkan untuk semua hari!']);
-    }
-
     public function getCalendarData(Request $request)
     {
         $startDate = $request->query('start_date', '2026-07-13');
@@ -358,49 +367,25 @@ class RosterController extends Controller
                          ->whereBetween('date', [$startDate, $endDate])
                          ->get();
         
-        return response()->json([
-            'status' => 'success', 
-            'data' => $rosters
-        ]);
+        return response()->json(['status' => 'success', 'data' => $rosters]);
     }
 
     public function updateEmployee(Request $request, $id)
     {
-        $request->validate([
-            'name' => 'required|string',
-            'position' => 'required|string',
-        ]);
-
+        $request->validate(['name' => 'required|string', 'position' => 'required|string']);
         $employee = Employee::find($id);
-
-        if (!$employee) {
-            return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
-        }
-
-        $employee->update([
-            'name' => $request->name,
-            'position' => $request->position,
-        ]);
-
-        return response()->json([
-            'status' => 'success', 
-            'message' => 'Data karyawan berhasil diubah!'
-        ]);
+        if (!$employee) return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
+        
+        $employee->update(['name' => $request->name, 'position' => $request->position]);
+        return response()->json(['status' => 'success', 'message' => 'Data karyawan berhasil diubah!']);
     }
 
     public function destroyEmployee($id)
     {
         $employee = Employee::find($id);
-
-        if (!$employee) {
-            return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
-        }
-
+        if (!$employee) return response()->json(['status' => 'error', 'message' => 'Karyawan tidak ditemukan'], 404);
+        
         $employee->delete();
-
-        return response()->json([
-            'status' => 'success', 
-            'message' => 'Karyawan berhasil dihapus!'
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'Karyawan berhasil dihapus!']);
     }
 }
